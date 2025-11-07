@@ -81,17 +81,24 @@ class HarrisKeypointDetector(KeypointDetector):
     def computeHarrisValues(self, srcImage):
         '''
         Input:
+            GrayScale의 이미지가 입력으로 들어옴
             srcImage -- Grayscale input image in a numpy array with
                         values in [0, 1]. The dimensions are (rows, cols).
         Output:
+            각 픽셀에 대해서 해리스 코너 점수를 가지고 있는 배열인 HarrisImage를 출력해줌
             harrisImage -- numpy array containing the Harris score at
                            each pixel.
+            각 픽셀에서의 그래디언트의 방향을 각도로 나타낸 orientationImage를 출력해줌
             orientationImage -- numpy array containing the orientation of the
                                 gradient at each pixel in degrees.
         '''
+        # shape는 (이미지의 세로높이(픽셀의 행 개수), 이미지의 가로너비(픽셀의 열 개수), 이미지의 색상 채널(RGB or GS))
+        # 인덱스 2까지만 복사(높이, 너비)
         height, width = srcImage.shape[:2]
 
+        # 해리스 이미지 배열 초기화
         harrisImage = np.zeros(srcImage.shape[:2])
+        # 오리엔테이션 이미지 배열 초기화
         orientationImage = np.zeros(srcImage.shape[:2])
 
         # TODO 1: Compute the harris corner strength for 'srcImage' at
@@ -99,12 +106,18 @@ class HarrisKeypointDetector(KeypointDetector):
         # for direction on how to do this. Also compute an orientation
         # for each pixel and store it in 'orientationImage.'
         # TODO-BLOCK-BEGIN
-        Ix = ndimage.sobel(srcImage, axis=0)
-        Iy = ndimage.sobel(srcImage, axis=1)
+        
+        # Sobel 필터를 이용하여, 각 픽셀에서의 밝기 변화량을 계산(기울기)
+        Ix = ndimage.sobel(srcImage, axis=0) # 세로 방향 미분
+        Iy = ndimage.sobel(srcImage, axis=1) # 가로 방향 미분
+        # sigma = 0.5인 가우시안 필터를 적용
         w_p = ndimage.gaussian_filter(srcImage, sigma=0.5)
+        
+        # 각각을 제곱, 곱셈
         Ixx = Ix**2
         Ixy = Ix*Iy
         Iyy = Iy**2
+        
         # Setting the standard deviation to 5 (more than 4 is acceptable)
         weighted_Ixx = ndimage.gaussian_filter(Ixx, sigma=0.5,truncate=5)
         weighted_Ixy = ndimage.gaussian_filter(Ixy, sigma=0.5, truncate=5)
@@ -128,7 +141,7 @@ class HarrisKeypointDetector(KeypointDetector):
             destImage -- numpy array containing True/False at
                          each pixel, depending on whether
                          the pixel value is the local maxima in
-                         its 7x7 neighborhood.
+                         its 7x7 neighborhood. (7x7 <- 비등방성으로 인함)
         '''
         destImage = np.zeros_like(harrisImage, np.bool)
 
@@ -440,12 +453,14 @@ class SSDFeatureMatcher(FeatureMatcher):
                 dimensions: rows (number of key points) x
                 columns (dimension of the feature descriptor)
         Output:
+            # 짝지어진 커플 목록 :     
             features matches: a list of cv2.DMatch objects
                 How to set attributes:
-                    queryIdx: The index of the feature in the first image
-                    trainIdx: The index of the feature in the second image
-                    distance: The distance between the two features
+                    queryIdx: The index of the feature in the first image(첫 번째 이미지의 몇 번 특징점인지)
+                    trainIdx: The index of the feature in the second image(두 번째 이미지의 몇 번 특징점인지)
+                    distance: The distance between the two features(두 특징점이 얼마나 비슷한지)
         '''
+        # 짝지어진 커플의 목록을 초기화(빈 배열)
         matches = []
         # feature count = n
         assert desc1.ndim == 2
@@ -464,14 +479,16 @@ class SSDFeatureMatcher(FeatureMatcher):
         # feature in the second image.
         # TODO-BLOCK-BEGIN
         
+        # 첫번째 이미지와 두 번째 이미지의 특징점 간의 거리를 계산한 2차원 배열(유사도 측정, 유클리드 거리)
+        # desc1의 i번째 특징점과 desc2의 j번째 특징점 간의 거리 = dist[i][j]
         dist = scipy.spatial.distance.cdist(desc1, desc2, 'euclidean')
         
-
+        # i를 키워가면서 desc1의 특징점들을 하나씩 살펴보고, desc2와의
         for i,l in enumerate(desc1):
-            min_dist = np.argmin(dist[i])
+            min_dist = np.argmin(dist[i]) # desc1의 i번째 특징점과 가장 유사도가 높았던 desc2의 j번째 특징점
             match = cv2.DMatch()
-            match.queryIdx = i
-            match.trainIdx = int(min_dist)
+            match.queryIdx = i # 첫 번째 이미지의 i번 특징점
+            match.trainIdx = int(min_dist) # 두 번째 이미지의 min_dist(가장 유사도가 높은(거리가 짧은))번 특징점
             match.distance = dist[i, int(min_dist)]
             matches.append(match)
 
@@ -518,7 +535,7 @@ class RatioFeatureMatcher(FeatureMatcher):
         # TODO-BLOCK-BEGIN
         
         dist = scipy.spatial.distance.cdist(desc1, desc2, 'euclidean')
-        
+        # 여기 까지 SSDFeatureMatcher와 동일
 
         for i,l in enumerate(desc1):
             sort_Idx = np.argsort(dist[i])
